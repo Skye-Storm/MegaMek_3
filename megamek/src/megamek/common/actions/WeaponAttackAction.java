@@ -40,6 +40,9 @@ import org.apache.logging.log4j.LogManager;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.stream.Stream;
+import java.util.stream.IntStream;
+import java.util.stream.Collectors;
 
 /**
  * Represents intention to fire a weapon at the target.
@@ -555,11 +558,12 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                             || (atype.getAmmoType() == AmmoType.T_NLRM)
                             || (atype.getAmmoType() == AmmoType.T_MEK_MORTAR))
                     && (munition.contains(AmmoType.Munitions.M_SEMIGUIDED))) {
-                for (TagInfo ti : game.getTagInfo()) {
-                    if (target.getId() == ti.target.getId()) {
-                        spotter = game.getEntity(ti.attackerId);
-                    }
-                }
+                final Targetable currentTarget = target; // Required for concurrency reasons
+                spotter = game.getTagInfo().stream()
+                    .filter(ti -> currentTarget.getId() == ti.target.getId())
+                    .findAny()
+                    .map(ti -> game.getEntity(ti.attackerId))
+                    .orElse(null);
             }
         }
 
@@ -954,11 +958,8 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
             toHit = new ToHitData();
         }
 
-        Entity te = null;
-        if (ttype == Targetable.TYPE_ENTITY) {
-            //Some weapons only target valid entities
-            te = (Entity) target;
-        }
+        //Some weapons only target valid entities
+        final Entity te = ttype == Targetable.TYPE_ENTITY ? (Entity) target : null;
 
         // If the attacker and target are in the same building & hex, they can
         // always attack each other, TW pg 175.
@@ -1273,17 +1274,9 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
         if (game.getOptions().booleanOption(OptionsConstants.ADVAERORULES_STRATOPS_ADVANCED_SENSORS)
                 && game.getOptions().booleanOption(OptionsConstants.ADVANCED_DOUBLE_BLIND)
                 && ae.isSpaceborne()) {
-            boolean networkFiringSolution = false;
             //Check to see if the attacker has a firing solution. Naval C3 networks share targeting data
-            if (ae.hasNavalC3()) {
-                for (Entity en : game.getC3NetworkMembers(ae)) {
-                    if (te != null && en.hasFiringSolutionFor(te.getId())) {
-                        networkFiringSolution = true;
-                        break;
-                    }
-                }
-            }
-            if (!networkFiringSolution) {
+            if (!ae.hasNavalC3() || te == null
+                || game.getC3NetworkMembers(ae).stream().noneMatch(en -> en.hasFiringSolutionFor(te.getId()))) {
                 //If we don't check for target type here, we can't fire screens and missiles at hexes...
                 if (target.getTargetType() == Targetable.TYPE_ENTITY && (te != null && !ae.hasFiringSolutionFor(te.getId())))  {
                     return Messages.getString("WeaponAttackAction.NoFiringSolution");
@@ -1303,15 +1296,14 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                         && (te != null) && te.hasSeenEntity(ae.getOwner()))
                 && !isArtilleryIndirect && !isIndirect && !isBearingsOnlyMissile) {
             boolean networkSee = false;
-            if (ae.hasC3() || ae.hasC3i() || ae.hasActiveNovaCEWS()) {
+            if (ae.hasC3() || ae.hasC3i() || ae.hasActiveNovaCEWS()
+                && game.getEntitiesVector().stream().anyMatch(en ->
+                    !en.isEnemyOf(ae)
+                    && en.onSameC3NetworkAs(ae)
+                    && Compute.canSee(game, en, target))) {
                 // c3 units can fire if any other unit in their network is in
                 // visual or sensor range
-                for (Entity en : game.getEntitiesVector()) {
-                    if (!en.isEnemyOf(ae) && en.onSameC3NetworkAs(ae) && Compute.canSee(game, en, target)) {
-                        networkSee = true;
-                        break;
-                    }
-                }
+                networkSee = true;
             }
             if (!networkSee) {
                 if (!Compute.inSensorRange(game, ae, target, null)) {
@@ -1410,129 +1402,75 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
 
         // limit large craft to zero net heat and to heat by arc
         final int heatCapacity = ae.getHeatCapacity();
-        if (ae.usesWeaponBays() && (weapon != null) && !weapon.getBayWeapons().isEmpty()) {
-            int totalHeat = 0;
-
+        if (ae.usesWeaponBays() && (weapon != null)) {
             // first check to see if there are any usable weapons
-            boolean usable = false;
-            for (WeaponMounted m : weapon.getBayWeapons()) {
-                WeaponType bayWType = m.getType();
-                boolean bayWUsesAmmo = (bayWType.getAmmoType() != AmmoType.T_NA);
-                if (m.canFire()) {
-                    if (bayWUsesAmmo) {
-                        if ((m.getLinked() != null) && (m.getLinked().getUsableShotsLeft() > 0)) {
-                            usable = true;
-                            break;
-                        }
-                    } else {
-                        usable = true;
-                        break;
-                    }
-                }
-            }
-            if (!usable) {
+            if (!weapon.streamBayWeapons()
+                .filter(WeaponMounted::canFire)
+                .anyMatch(m ->
+                    m.getType().getAmmoType() == AmmoType.T_NA
+                    || Optional.ofNullable(m.getLinked()).map(a -> a.getUsableShotsLeft() > 0).orElse(false)
+                )
+            ) {
                 return Messages.getString("WeaponAttackAction.BayNotReady");
             }
 
-            // create an array of booleans of locations
-            boolean[] usedFrontArc = new boolean[ae.locations()];
-            boolean[] usedRearArc = new boolean[ae.locations()];
-            for (int i = 0; i < ae.locations(); i++) {
-                usedFrontArc[i] = false;
-                usedRearArc[i] = false;
-            }
-
-            for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                Object o = i.nextElement();
-                if (!(o instanceof WeaponAttackAction)) {
-                    continue;
-                }
-                WeaponAttackAction prevAttack = (WeaponAttackAction) o;
-                // Strafing attacks only count heat for first shot
-                if (prevAttack.isStrafing() && !prevAttack.isStrafingFirstShot()) {
-                    continue;
-                }
-                if ((prevAttack.getEntityId() == attackerId) && (weaponId != prevAttack.getWeaponId())) {
-                    WeaponMounted prevWeapon = (WeaponMounted) ae.getEquipment(prevAttack.getWeaponId());
-                    if (prevWeapon != null) {
-                        int loc = prevWeapon.getLocation();
-                        boolean rearMount = prevWeapon.isRearMounted();
-                        if (game.getOptions().booleanOption(OptionsConstants.ADVAERORULES_HEAT_BY_BAY)) {
-                            for (WeaponMounted bWeapon : prevWeapon.getBayWeapons()) {
-                                totalHeat += bWeapon.getCurrentHeat();
-                            }
-                        } else {
-                            if (!rearMount) {
-                                if (!usedFrontArc[loc]) {
-                                    totalHeat += ae.getHeatInArc(loc, rearMount);
-                                    usedFrontArc[loc] = true;
-                                }
-                            } else {
-                                if (!usedRearArc[loc]) {
-                                    totalHeat += ae.getHeatInArc(loc, rearMount);
-                                    usedRearArc[loc] = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // now check the current heat
-            int loc = weapon.getLocation();
-            boolean rearMount = weapon.isRearMounted();
-            int currentHeat = ae.getHeatInArc(loc, rearMount);
-            if (game.getOptions().booleanOption(OptionsConstants.ADVAERORULES_HEAT_BY_BAY)) {
-                currentHeat = 0;
-                for (WeaponMounted bWeapon : weapon.getBayWeapons()) {
-                    currentHeat += bWeapon.getCurrentHeat();
-                }
-            }
-            // check to see if this is currently the only arc being fired
-            boolean onlyArc = true;
-            for (int nLoc = 0; nLoc < ae.locations(); nLoc++) {
-                if (nLoc == loc) {
-                    continue;
-                }
-                if (usedFrontArc[nLoc] || usedRearArc[nLoc]) {
-                    onlyArc = false;
-                    break;
-                }
-            }
+            // A lazy stream that evaluates to the weapon bays that have already been fired.
+            Stream<WeaponMounted> firedWeaponBays = game.getActionsVector().stream()
+                .filter(WeaponAttackAction.class::isInstance)
+                .map(WeaponAttackAction.class::cast)
+                .filter(prevAttack ->
+                    // Strafing attacks only count heat for first shot
+                    (!prevAttack.isStrafing() || prevAttack.isStrafingFirstShot())
+                    && prevAttack.getEntityId() == attackerId
+                )
+                .map(WeaponAttackAction::getWeaponId)
+                .filter(id -> id != weaponId)
+                .flatMap(id -> Stream.ofNullable((WeaponMounted) ae.getEquipment(id)));
 
             if (game.getOptions().booleanOption(OptionsConstants.ADVAERORULES_HEAT_BY_BAY)) {
-                if ((totalHeat + currentHeat) > heatCapacity) {
-                    // FIXME: This is causing weird problems (try firing all the
-                    // Suffen's nose weapons)
+                // Total heat of fired weapon bays and current weapon bay
+                int totalHeat = Stream.concat(firedWeaponBays, Stream.of(weapon))
+                    .flatMap(WeaponMounted::streamBayWeapons)
+                    .collect(Collectors.summingInt(WeaponMounted::getCurrentHeat));
+
+                if (totalHeat > heatCapacity) {
                     return Messages.getString("WeaponAttackAction.HeatOverCap");
                 }
             } else {
-                if (!rearMount) {
-                    if (!usedFrontArc[loc] && ((totalHeat + currentHeat) > heatCapacity) && !onlyArc) {
-                        return Messages.getString("WeaponAttackAction.HeatOverCap");
-                    }
-                } else {
-                    if (!usedRearArc[loc] && ((totalHeat + currentHeat) > heatCapacity) && !onlyArc) {
+                // A map of arcs that have already been fired, keyed by location and whether an arc is rear-mounted.
+                Map<Integer, Set<Boolean>> firedArcs = firedWeaponBays.collect(
+                    Collectors.groupingBy(WeaponMounted::getLocation,
+                        Collectors.mapping(WeaponMounted::isRearMounted, Collectors.toSet())
+                    )
+                );
+
+                // If a weapon in the same arc has already been fired, no additional heat generation will be incurred
+                if (!firedArcs.get(weapon.getLocation()).contains(weapon.isRearMounted())) {
+                    // Add up heat from each firing arc
+                    int totalHeat = firedArcs.entrySet().stream()
+                        .flatMapToInt(a -> a.getValue().stream().mapToInt(direction -> ae.getHeatInArc(a.getKey(), direction)))
+                        .sum();
+
+                    int currentHeat = ae.getHeatInArc(weapon.getLocation(), weapon.isRearMounted());
+
+                    // If no other arcs have been fired, an arc may be fired even if it exceeds the heat capacity of the unit.
+
+                    // TODO: Add Control Roll for firing single overheating arc as per page 161 of the tenth printing of Total Warfare
+                    if (totalHeat + currentHeat > heatCapacity && firedArcs.values().stream().anyMatch(l -> l.contains(true))) {
                         return Messages.getString("WeaponAttackAction.HeatOverCap");
                     }
                 }
             }
         } else if (ae instanceof Dropship) {
-            int totalheat = 0;
+            int totalHeat = game.getActionsVector().stream()
+                .filter(WeaponAttackAction.class::isInstance)
+                .map(WeaponAttackAction.class::cast)
+                .map(WeaponAttackAction::getWeaponId)
+                .filter(id -> id != weaponId)
+                .mapToInt(id -> ((WeaponMounted) ae.getEquipment(id)).getCurrentHeat())
+                .sum();
 
-            for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                Object o = i.nextElement();
-                if (!(o instanceof WeaponAttackAction)) {
-                    continue;
-                }
-                WeaponAttackAction prevAttack = (WeaponAttackAction) o;
-                if ((prevAttack.getEntityId() == attackerId) && (weaponId != prevAttack.getWeaponId())) {
-                    Mounted prevWeapon = ae.getEquipment(prevAttack.getWeaponId());
-                    totalheat += prevWeapon.getCurrentHeat();
-                }
-            }
-
-            if (weapon != null && ((totalheat + weapon.getCurrentHeat()) > heatCapacity)) {
+            if (Optional.ofNullable(weapon).map(currentWeapon -> totalHeat + currentWeapon.getCurrentHeat() > heatCapacity).orElse(false)) {
                 return Messages.getString("WeaponAttackAction.HeatOverCap");
             }
         }
@@ -1744,19 +1682,13 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                 }
 
                 // can only make a strike attack against a single target
-                if (!isStrafing) {
-                    for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                        EntityAction ea = i.nextElement();
-                        if (!(ea instanceof WeaponAttackAction)) {
-                            continue;
-                        }
-
-                        WeaponAttackAction prevAttk = (WeaponAttackAction) ea;
-                        if ((prevAttk.getEntityId() == ae.getId()) && (prevAttk.getTargetId() != target.getId())
-                                && !wtype.hasFlag(WeaponType.F_ALT_BOMB)) {
-                            return Messages.getString("WeaponAttackAction.CantSplitFire");
-                        }
-                    }
+                if (!isStrafing
+                    && !wtype.hasFlag(WeaponType.F_ALT_BOMB)
+                    && game.getActionsVector().stream()
+                        .filter(WeaponAttackAction.class::isInstance)
+                        .map(WeaponAttackAction.class::cast)
+                        .anyMatch(prevAttk -> prevAttk.getEntityId() == ae.getId() && prevAttk.getTargetId() != target.getId())) {
+                    return Messages.getString("WeaponAttackAction.CantSplitFire");
                 }
             // VTOL Strafing
             } else if ((ae instanceof VTOL) && isStrafing) {
@@ -1802,13 +1734,14 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                         // and finally, can only use Arrow IV artillery
                         if (ae.usesWeaponBays()) {
                             //For Dropships
-                            for (WeaponMounted bayW : weapon.getBayWeapons()) {
+                            if (weapon.streamBayWeapons()
                                 // check the loaded ammo for the Arrow IV flag
-                                AmmoMounted bayWAmmo = bayW.getLinkedAmmo();
-                                AmmoType bAType = bayWAmmo.getType();
-                                if (bAType.getAmmoType() != AmmoType.T_ARROW_IV) {
-                                    return Messages.getString("WeaponAttackAction.OnlyArrowArty");
-                                }
+                                .map(WeaponMounted::getLinkedAmmo)
+                                .map(AmmoMounted::getType)
+                                .map(AmmoType::getAmmoType)
+                                .anyMatch(bAType -> bAType != AmmoType.T_ARROW_IV)
+                            ) {
+                                return Messages.getString("WeaponAttackAction.OnlyArrowArty");
                             }
                         } else if ((wtype.getAmmoType() != AmmoType.T_ARROW_IV) &&
                                 (wtype.getAmmoType() != AmmoType.T_ARROW_IV_BOMB)) {
@@ -1934,40 +1867,31 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
             if ((ae instanceof BattleArmor) && wtype.hasFlag(WeaponType.F_INFANTRY)) {
                 final int weapId = ae.getEquipmentNum(weapon);
                 // See if this unit has made a previous AP attack
-                for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                    Object o = i.nextElement();
-                    if (!(o instanceof WeaponAttackAction)) {
-                        continue;
-                    }
-                    WeaponAttackAction prevAttack = (WeaponAttackAction) o;
+                if (game.getActionsVector().stream()
+                    .filter(WeaponAttackAction.class::isInstance)
+                    .map(WeaponAttackAction.class::cast)
                     // Is this an attack from this entity
-                    if (prevAttack.getEntityId() == ae.getId()) {
-                        Mounted prevWeapon = ae.getEquipment(prevAttack.getWeaponId());
-                        WeaponType prevWtype = (WeaponType) prevWeapon.getType();
-                        if (prevWtype.hasFlag(WeaponType.F_INFANTRY) && (prevAttack.getWeaponId() != weapId)) {
-                            return Messages.getString("WeaponAttackAction.OnlyOneBAAPAttack");
-                        }
-                    }
+                    .filter(prevAttack -> prevAttack.getEntityId() == ae.getId())
+                    .map(WeaponAttackAction::getWeaponId)
+                    .anyMatch(prevAttackId -> prevAttackId != weapId && ae.getEquipment(prevAttackId).getType().hasFlag(WeaponType.F_INFANTRY))
+                ) {
+                    return Messages.getString("WeaponAttackAction.OnlyOneBAAPAttack");
                 }
             }
 
             // BA compact narc: we have one weapon for each trooper, but you
             // can fire only at one target at a time
             if (wtype.getName().equals("Compact Narc")) {
-                for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                    EntityAction ea = i.nextElement();
-                    if (!(ea instanceof WeaponAttackAction)) {
-                        continue;
-                    }
-                    final WeaponAttackAction prevAttack = (WeaponAttackAction) ea;
-                    if (prevAttack.getEntityId() == attackerId) {
-                        Mounted prevWeapon = ae.getEquipment(prevAttack.getWeaponId());
-                        if (prevWeapon.getType().getName().equals("Compact Narc")) {
-                            if (prevAttack.getTargetId() != target.getId()) {
-                                return Messages.getString("WeaponAttackAction.OneTargetForCNarc");
-                            }
-                        }
-                    }
+                if (game.getActionsVector().stream()
+                    .filter(WeaponAttackAction.class::isInstance)
+                    .map(WeaponAttackAction.class::cast)
+                    .anyMatch(prevAttack -> prevAttack.getEntityId() == attackerId
+                        && ae.getEquipment(prevAttack.getWeaponId())
+                            .getType().getName().equals("Compact Narc")
+                        && prevAttack.getTargetId() != target.getId()
+                    )
+                ) {
+                    return Messages.getString("WeaponAttackAction.OneTargetForCNarc");
                 }
             }
 
@@ -1983,23 +1907,25 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                     && (wtype.hasFlag(WeaponType.F_TASER) || wtype.getAmmoType() == AmmoType.T_NARC)) {
                 // Go through all of the current actions to see if a NARC or Taser
                 // has been fired
-                for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                    Object o = i.nextElement();
-                    if (!(o instanceof WeaponAttackAction)) {
-                        continue;
+
+                // A lazy stream that evaluates to the weapon types this entity has already fired at other targets.
+                Stream<WeaponType> diffTargetWeaponTypes = game.getActionsVector().stream()
+                    .filter(WeaponAttackAction.class::isInstance)
+                    .map(WeaponAttackAction.class::cast)
+                    .filter(prevAttack ->
+                        // Is this an attack from this entity to a different target?
+                        prevAttack.getEntityId() == ae.getId() && prevAttack.getTargetId() != target.getId()
+                    )
+                    .map(prevAttack -> (WeaponType) ae.getEquipment(prevAttack.getWeaponId()).getType());
+
+                if (wtype.hasFlag(WeaponType.F_TASER)) {
+                    if (diffTargetWeaponTypes.anyMatch(prevWtype -> prevWtype.hasFlag(WeaponType.F_TASER))) {
+                        return Messages.getString("WeaponAttackAction.BATaserSameTarget");
                     }
-                    WeaponAttackAction prevAttack = (WeaponAttackAction) o;
-                    // Is this an attack from this entity to a different target?
-                    if (prevAttack.getEntityId() == ae.getId() && prevAttack.getTargetId() != target.getId()) {
-                        Mounted prevWeapon = ae.getEquipment(prevAttack.getWeaponId());
-                        WeaponType prevWtype = (WeaponType) prevWeapon.getType();
-                        if (prevWeapon.getType().hasFlag(WeaponType.F_TASER)
-                                && weapon.getType().hasFlag(WeaponType.F_TASER)) {
-                            return Messages.getString("WeaponAttackAction.BATaserSameTarget");
-                        }
-                        if (prevWtype.getAmmoType() == AmmoType.T_NARC && wtype.getAmmoType() == AmmoType.T_NARC) {
-                            return Messages.getString("WeaponAttackAction.BANarcSameTarget");
-                        }
+                } else {
+                    assert wtype.getAmmoType() == AmmoType.T_NARC;
+                    if (diffTargetWeaponTypes.anyMatch(prevWtype -> prevWtype.getAmmoType() == AmmoType.T_NARC)) {
+                        return Messages.getString("WeaponAttackAction.BANarcSameTarget");
                     }
                 }
             }
@@ -2243,21 +2169,23 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                     return Messages.getString("WeaponAttackAction.CantMoveAndFieldGun");
                 }
                 // check for mixing infantry and field gun attacks
-                for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                    EntityAction ea = i.nextElement();
-                    if (!(ea instanceof WeaponAttackAction)) {
-                        continue;
-                    }
-                    final WeaponAttackAction prevAttack = (WeaponAttackAction) ea;
-                    if (prevAttack.getEntityId() == attackerId) {
-                        Mounted prevWeapon = ae.getEquipment(prevAttack.getWeaponId());
-                        if ((prevWeapon.getType().hasFlag(WeaponType.F_INFANTRY)
-                                && (weapon.getLocation() == Infantry.LOC_FIELD_GUNS))
-                                || (weapon.getType().hasFlag(WeaponType.F_INFANTRY)
-                                        && (prevWeapon.getLocation() == Infantry.LOC_FIELD_GUNS))) {
-                            return Messages.getString("WeaponAttackAction.FieldGunOrSAOnly");
-                        }
-                    }
+                if (game.getActionsVector().stream()
+                    .filter(WeaponAttackAction.class::isInstance)
+                    .map(WeaponAttackAction.class::cast)
+                    .filter(prevAttack -> prevAttack.getEntityId() == attackerId)
+                    .map(prevAttack -> ae.getEquipment(prevAttack.getWeaponId()))
+                    .anyMatch(prevWeapon ->
+                        (
+                            prevWeapon.getType().hasFlag(WeaponType.F_INFANTRY)
+                                && weapon.getLocation() == Infantry.LOC_FIELD_GUNS
+                        )
+                        || (
+                            prevWeapon.getLocation() == Infantry.LOC_FIELD_GUNS
+                                && weapon.getType().hasFlag(WeaponType.F_INFANTRY)
+                        )
+                    )
+                ) {
+                    return Messages.getString("WeaponAttackAction.FieldGunOrSAOnly");
                 }
             }
 
@@ -2481,60 +2409,57 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
             // Some weapons can only be fired by themselves
 
             // Check to see if another solo weapon was fired
-            boolean hasSoloAttack = false;
-            String soloWeaponName = "";
-            for (EntityAction ea : game.getActionsVector()) {
-                if ((ea.getEntityId() == attackerId) && (ea instanceof WeaponAttackAction)) {
-                    WeaponAttackAction otherWAA = (WeaponAttackAction) ea;
-                    final Mounted otherWeapon = ae.getEquipment(otherWAA.getWeaponId());
 
-                    if (!(otherWeapon.getType() instanceof WeaponType)) {
-                        continue;
-                    }
-                    final WeaponType otherWtype = (WeaponType) otherWeapon.getType();
-                    hasSoloAttack |= (otherWtype.hasFlag(WeaponType.F_SOLO_ATTACK) && otherWAA.getWeaponId() != weaponId);
-                    if (hasSoloAttack) {
-                        soloWeaponName = otherWeapon.getName();
-                        break;
-                    }
-                }
-            }
-            if (hasSoloAttack) {
-                return String.format(Messages.getString("WeaponAttackAction.CantFireWithOtherWeapons"), soloWeaponName);
+            // The name of a solo weapon that has already been fired, if one exists.
+            Optional<String> soloWeaponName = game.getActionsVector().stream()
+                .filter(prevAttack -> prevAttack.getEntityId() == attackerId)
+                .filter(WeaponAttackAction.class::isInstance)
+                .map(WeaponAttackAction.class::cast)
+                .map(WeaponAttackAction::getWeaponId)
+                .filter(otherWAAId -> otherWAAId != weaponId)
+                .map(otherWAAId -> ae.getEquipment(otherWAAId))
+                .filter(otherWeapon -> otherWeapon.getType().hasFlag(WeaponType.F_SOLO_ATTACK))
+                .map(Mounted::getName)
+                .findAny();
+
+            if (soloWeaponName.isPresent()) {
+                return String.format(Messages.getString("WeaponAttackAction.CantFireWithOtherWeapons"), soloWeaponName.orElseThrow());
             }
 
             // Handle solo attack weapons.
-            if (wtype.hasFlag(WeaponType.F_SOLO_ATTACK)) {
-                for (EntityAction ea : game.getActionsVector()) {
-                    if (!(ea instanceof WeaponAttackAction)) {
-                        continue;
-                    }
-                    WeaponAttackAction prevAttack = (WeaponAttackAction) ea;
-                    if (prevAttack.getEntityId() == attackerId) {
-                        // If the attacker fires another weapon, this attack fails.
-                        if (weaponId != prevAttack.getWeaponId()) {
-                            return Messages.getString("WeaponAttackAction.CantMixAttacks");
-                        }
-                    }
-                }
+            if (wtype.hasFlag(WeaponType.F_SOLO_ATTACK) && game.getActionsVector().stream()
+                .filter(prevAttack -> prevAttack.getEntityId() == attackerId)
+                .filter(WeaponAttackAction.class::isInstance)
+                .map(WeaponAttackAction.class::cast)
+                // If the attacker fires another weapon, this attack fails.
+                .anyMatch(prevAttack -> prevAttack.getEntityId() == attackerId && prevAttack.getWeaponId() != weaponId)
+            ) {
+                return Messages.getString("WeaponAttackAction.CantMixAttacks");
             }
 
             // Protomechs cannot fire arm weapons and main gun in the same turn
-            if ((ae instanceof Protomech)
-                    && ((weapon.getLocation() == Protomech.LOC_MAINGUN)
-                    || (weapon.getLocation() == Protomech.LOC_RARM)
-                    || (weapon.getLocation() == Protomech.LOC_LARM))) {
-                final boolean firingMainGun = weapon.getLocation() == Protomech.LOC_MAINGUN;
-                for (EntityAction ea : game.getActionsVector()) {
-                    if ((ea.getEntityId() == attackerId) && (ea instanceof WeaponAttackAction)) {
-                        WeaponAttackAction otherWAA = (WeaponAttackAction) ea;
-                        final Mounted otherWeapon = ae.getEquipment(otherWAA.getWeaponId());
-                        if ((firingMainGun && ((otherWeapon.getLocation() == Protomech.LOC_RARM)
-                                || (otherWeapon.getLocation() == Protomech.LOC_LARM)))
-                                || !firingMainGun && (otherWeapon.getLocation() == Protomech.LOC_MAINGUN)) {
+            if (ae instanceof Protomech) {
+                // A lazy stream that evaluates to the locations of weapons already fired by the attacker.
+                IntStream firedWeaponLocations = game.getActionsVector().stream()
+                    .filter(ea -> ea.getEntityId() == attackerId)
+                    .filter(WeaponAttackAction.class::isInstance)
+                    .map(WeaponAttackAction.class::cast)
+                    .map(otherWAA -> ae.getEquipment(otherWAA.getWeaponId()))
+                    .mapToInt(Mounted::getLocation);
+
+                switch (weapon.getLocation()) {
+                    case Protomech.LOC_MAINGUN:
+                        if (firedWeaponLocations.anyMatch(otherWeaponLocation ->
+                            otherWeaponLocation == Protomech.LOC_LARM || otherWeaponLocation == Protomech.LOC_RARM
+                        )) {
                             return Messages.getString("WeaponAttackAction.CantFireArmsAndMainGun");
                         }
-                    }
+                        break;
+                    case Protomech.LOC_LARM:
+                    case Protomech.LOC_RARM:
+                        if (firedWeaponLocations.anyMatch(otherWeaponLocation -> otherWeaponLocation == Protomech.LOC_MAINGUN)) {
+                            return Messages.getString("WeaponAttackAction.CantFireArmsAndMainGun");
+                        }
                 }
             }
 
@@ -3751,18 +3676,16 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
             }
             // units making air to ground attacks are easier to hit by air-to-air
             // attacks
-            if (Compute.isAirToAir(ae, target)) {
-                for (Enumeration<EntityAction> i = game.getActions(); i.hasMoreElements();) {
-                    EntityAction ea = i.nextElement();
-                    if (!(ea instanceof WeaponAttackAction)) {
-                        continue;
-                    }
-                    WeaponAttackAction prevAttack = (WeaponAttackAction) ea;
-                    if ((te != null && prevAttack.getEntityId() == te.getId()) && prevAttack.isAirToGround(game)) {
-                        toHit.addModifier(-3, Messages.getString("WeaponAttackAction.TeGroundAttack"));
-                        break;
-                    }
-                }
+
+            // The ID of the entity being targeted.
+            final Optional<Integer> targetEntityId = Optional.ofNullable(te).map(Entity::getId);
+
+            if (Compute.isAirToAir(ae, target) && targetEntityId.isPresent() && game.getActionsVector().stream()
+                .filter(WeaponAttackAction.class::isInstance)
+                .map(WeaponAttackAction.class::cast)
+                .anyMatch(prevAttack -> prevAttack.getEntityId() == targetEntityId.orElseThrow() && prevAttack.isAirToGround(game))
+            ) {
+                toHit.addModifier(-3, Messages.getString("WeaponAttackAction.TeGroundAttack"));
             }
             // grounded aero
             if (!ae.isAirborne() && !ae.isSpaceborne()) {
@@ -4284,7 +4207,9 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
 
         // Aerospace target modifiers
         if (te != null && te.isAero() && te.isAirborne()) {
-            IAero a = (IAero) te;
+            // Finalized for concurrency reasons
+            final Entity targetEntity = te;
+            IAero a = (IAero) targetEntity;
 
             // is the target at zero velocity
             if ((a.getCurrentVelocity() == 0) && !(a.isSpheroid() && !game.getBoard().inSpace())) {
@@ -4308,19 +4233,24 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
             // Target hidden in the sensor shadow of a larger spacecraft
             if (game.getOptions().booleanOption(OptionsConstants.ADVAERORULES_STRATOPS_SENSOR_SHADOW)
                     && game.getBoard().inSpace()) {
-                for (Entity en : Compute.getAdjacentEntitiesAlongAttack(ae.getPosition(), target.getPosition(), game)) {
-                    if (!en.isEnemyOf(te) && en.isLargeCraft()
-                            && ((en.getWeight() - te.getWeight()) >= -STRATOPS_SENSOR_SHADOW_WEIGHT_DIFF)) {
-                        toHit.addModifier(+1, Messages.getString("WeaponAttackAction.SensorShadow"));
-                        break;
-                    }
+                if (Compute.getAdjacentEntitiesAlongAttack(ae.getPosition(), target.getPosition(), game).stream()
+                    .anyMatch(en ->
+                        !en.isEnemyOf(targetEntity)
+                            && en.isLargeCraft()
+                            && en.getWeight() - targetEntity.getWeight() >= -STRATOPS_SENSOR_SHADOW_WEIGHT_DIFF
+                    )
+                ) {
+                    toHit.addModifier(+1, Messages.getString("WeaponAttackAction.SensorShadow"));
                 }
-                for (Entity en : game.getEntitiesVector(target.getPosition())) {
-                    if (!en.isEnemyOf(te) && en.isLargeCraft() && !en.equals((Entity) a)
-                            && ((en.getWeight() - te.getWeight()) >= -STRATOPS_SENSOR_SHADOW_WEIGHT_DIFF)) {
-                        toHit.addModifier(+1, Messages.getString("WeaponAttackAction.SensorShadow"));
-                        break;
-                    }
+                if (game.getEntitiesVector(target.getPosition()).stream()
+                    .anyMatch(en ->
+                        !en.isEnemyOf(targetEntity)
+                            && en.isLargeCraft()
+                            && !en.equals(targetEntity)
+                            && en.getWeight() - targetEntity.getWeight() >= -STRATOPS_SENSOR_SHADOW_WEIGHT_DIFF
+                    )
+                ) {
+                    toHit.addModifier(+1, Messages.getString("WeaponAttackAction.SensorShadow"));
                 }
             }
         }
@@ -4491,26 +4421,14 @@ public class WeaponAttackAction extends AbstractAttackAction implements Serializ
                     && (game.getBoard().getHex(te.getPosition()).containsTerrain(Terrains.WOODS)
                     || game.getBoard().getHex(te.getPosition()).containsTerrain(Terrains.JUNGLE));
             if (los.canSee() && (targetWoodsAffectModifier || los.thruWoods())) {
-                boolean bapInRange = Compute.bapInRange(game, ae, te);
-                boolean c3BAP = false;
-                if (!bapInRange) {
-                    for (Entity en : game.getC3NetworkMembers(ae)) {
-                        if (ae.equals(en)) {
-                            continue;
-                        }
-                        bapInRange = Compute.bapInRange(game, en, te);
-                        if (bapInRange) {
-                            c3BAP = true;
-                            break;
-                        }
-                    }
-                }
-                if (bapInRange) {
-                    if (c3BAP) {
-                        toHit.addModifier(-1, Messages.getString("WeaponAttackAction.BAPInWoodsC3"));
-                    } else {
-                        toHit.addModifier(-1, Messages.getString("WeaponAttackAction.BAPInWoods"));
-                    }
+                // Necessary for concurrency reasons
+                final Entity targetEntity = te;
+                if (Compute.bapInRange(game, ae, targetEntity)) {
+                    toHit.addModifier(-1, Messages.getString("WeaponAttackAction.BAPInWoods"));
+                } else if (game.getC3NetworkMembers(ae).stream()
+                    .anyMatch(en -> !ae.equals(en) && Compute.bapInRange(game, en, targetEntity))
+                ) {
+                    toHit.addModifier(-1, Messages.getString("WeaponAttackAction.BAPInWoodsC3"));
                 }
             }
         }
