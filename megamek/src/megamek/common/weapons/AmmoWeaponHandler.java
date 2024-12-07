@@ -20,6 +20,7 @@
 package megamek.common.weapons;
 
 import java.io.Serial;
+import java.util.List;
 import java.util.Vector;
 
 import megamek.common.Compute;
@@ -32,6 +33,8 @@ import megamek.common.Report;
 import megamek.common.Roll;
 import megamek.common.ToHitData;
 import megamek.common.actions.WeaponAttackAction;
+import megamek.common.modifiers.EquipmentModifier;
+import megamek.common.modifiers.WeaponJamModifier;
 import megamek.common.options.OptionsConstants;
 import megamek.logging.MMLogger;
 import megamek.server.totalwarfare.TWGameManager;
@@ -99,8 +102,9 @@ public class AmmoWeaponHandler extends WeaponHandler {
 
     @Override
     protected boolean doChecks(Vector<Report> vPhaseReport) {
-        return doAmmoFeedProblemCheck(vPhaseReport);
+        return super.doChecks(vPhaseReport) && doAmmoFeedProblemCheck(vPhaseReport);
     }
+
 
     /**
      * Carry out an 'ammo feed problems' check on the weapon. Return true if it blew up.

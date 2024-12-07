@@ -32,6 +32,7 @@ import megamek.common.enums.AimingMode;
 import megamek.common.enums.GamePhase;
 import megamek.common.equipment.AmmoMounted;
 import megamek.common.equipment.WeaponMounted;
+import megamek.common.modifiers.*;
 import megamek.common.options.OptionsConstants;
 import megamek.common.planetaryconditions.PlanetaryConditions;
 import megamek.logging.MMLogger;
@@ -453,12 +454,31 @@ public class WeaponHandler implements AttackHandler, Serializable {
     }
 
     /**
-     * @param vPhaseReport
-     *                     - A <code>Vector</code> containing the phasereport.
-     * @return a <code>boolean</code> value indicating wether or not the attack
-     *         misses because of a failed check.
+     * Processes effects that may make the weapon malfunction in various ways. Overriding methods should generally call super.
+     *
+     * @param vPhaseReport The current phase's report which will be added to accordingly
+     * @return a boolean value indicating wether or not the attack misses because of a failed check.
      */
     protected boolean doChecks(Vector<Report> vPhaseReport) {
+        return processJamFromEquipmentModifier(vPhaseReport);
+    }
+
+    /**
+     * Jams the weapon if it is has a jamming equipment modifier (e.g. salvage quality) that is triggered by the to-hit roll and
+     * adds the appropriate report. See Mercenaries Supplemental Update, p.138
+     *
+     * @param phaseReport The current phase's report which will be added to accordingly
+     * @see WeaponJamModifier
+     */
+    protected boolean processJamFromEquipmentModifier(List<Report> phaseReport) {
+        for (EquipmentModifier modifier : weapon.getModifiers()) {
+            if (modifier instanceof WeaponJamModifier jamModifier && jamModifier.isJammed(roll.getIntValue())) {
+                phaseReport.add(new Report(3161).subject(subjectId));
+                weapon.setJammed(true);
+                isJammed = true;
+                return true;
+            }
+        }
         return false;
     }
 

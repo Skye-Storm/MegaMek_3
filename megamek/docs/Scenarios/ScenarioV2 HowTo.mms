@@ -280,12 +280,69 @@ factions:
           # motive: 1
           # firecontrol: 1
 
+        # quality, partial repair modifiers
+        modifiers:
+          # Engine modifiers are added to the engine if the unit has an engine, ignored otherwise
+          engine:
+            # Walk MPs: the given amount is added; run mp are recalculated
+            - type: walkmp
+              delta: -1
+
+          # modifiers that apply to the unit; this must also be done for modifiers that apply
+          # to systems like Gyro, Controls, Engine; always write as list
+          unit:
+            - type: runmp
+              delta: -1
+              # The system that this modifier comes from: gyro, avionics, controls, life support, cockpit
+              system: gyro
+
+            # Gyro/controls problems: unit cannot twist (turret/torso)
+            - type: notwist
+              system: gyro
+
+          # note that a heat modifier can be applied to a jump jet slot, resulting in modified heat when jumping; all
+          # heat modifiers on JJ slots stack
+
+          # the locations are not a list
+          LA:
+            # the slots must always be a list! Slots are 1-based (eg.g. CT = 1 to 12)
+            - slot: 4
+              modifiers:
+                # the modifiers can be a list or a single entry
+                # misfire
+                - type: misfire
+                  # The roll results to misfire on, must always be a list, not a single number
+                  on: [ 2, 3 ]
+                # heat adds the given delta to the weapon heat
+                - type: heat
+                  delta: 2
+                # damage obviously adds the given delta to the weapon's damage
+                - type: damage
+                  delta: -1
+                # tohit changes the tohit target number by the given delta
+                - type: tohit
+                  delta: 1
+
+          RA:
+            - slot: 1
+              modifier:
+                type: heat
+                delta: 2
+
+          CT:
+            - slot: 11
+              modifier:
+                type: jam
+                on: [ 5, 6 ]
+
+
         # ammo types and reduced amount
         # this usually requires looking up the unit file and possibly AmmoType.java for the type designations
         ammo:
           LA:
-            slot: 5
-            shots: 2
+            # the slots must always be a list!
+            - slot: 5
+              shots: 2
             # type: xyz (TODO)
 
         # Optional: give details of the crew/pilot - currently only for single pilots (TODO)

@@ -17,14 +17,19 @@
  * along with MegaMek. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package megamek.common;
+package megamek.common.modifiers;
 
-/**
- * Enum of valid formatting styles, to use with MekView objects
- * HTML: contains HTML markup
- * Discord: Contains Discord markup and formatting
- * None: plain text
- */
-public enum ViewFormatting {
-    HTML, NONE, DISCORD
+public class AbstractSystemModifier extends AbstractEquipmentModifier implements SystemModifier {
+
+    private final SystemModifier.EntitySystem system;
+
+    public AbstractSystemModifier(Reason reason, SystemModifier.EntitySystem system) {
+        super(reason);
+        this.system = system;
+    }
+
+    @Override
+    public SystemModifier.EntitySystem system() {
+        return system;
+    }
 }

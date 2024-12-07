@@ -25,6 +25,7 @@ import megamek.common.equipment.AmmoMounted;
 import megamek.common.equipment.BombMounted;
 import megamek.common.equipment.MiscMounted;
 import megamek.common.equipment.WeaponMounted;
+import megamek.common.modifiers.EquipmentModifier;
 import megamek.common.options.GameOptions;
 import megamek.common.options.OptionsConstants;
 import megamek.common.options.WeaponQuirks;
@@ -40,7 +41,7 @@ import megamek.logging.MMLogger;
  * @author Ben
  * @since April 1, 2002, 1:29 PM
  */
-public class Mounted<T extends EquipmentType> implements Serializable, RoundUpdated, PhaseUpdated {
+public class Mounted<T extends EquipmentType> implements Serializable, RoundUpdated, PhaseUpdated, Modifiable {
     private static final MMLogger logger = MMLogger.create(Mounted.class);
 
     private static final long serialVersionUID = 6438017987074691566L;
@@ -175,6 +176,8 @@ public class Mounted<T extends EquipmentType> implements Serializable, RoundUpda
      * a squad support weapon on <code>BattleArmor</code>.
      */
     private boolean squadSupportWeapon;
+
+    protected final List<EquipmentModifier> modifiers = new ArrayList<>();
 
     /** Creates new Mounted */
     protected Mounted(Entity entity, T type) {
@@ -1774,5 +1777,9 @@ public class Mounted<T extends EquipmentType> implements Serializable, RoundUpda
         if (size != 1)
             state.add("Size: " + size);
         return intro + " { " + String.join(", ", state) + " }";
+    }
+
+    public List<EquipmentModifier> getModifiers() {
+        return modifiers;
     }
 }

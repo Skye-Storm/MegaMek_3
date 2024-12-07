@@ -21,6 +21,8 @@ package megamek.common.equipment;
 
 import megamek.common.*;
 import megamek.common.actions.WeaponAttackAction;
+import megamek.common.modifiers.EquipmentModifier;
+import megamek.common.modifiers.HeatModifier;
 import megamek.common.options.OptionsConstants;
 import megamek.common.weapons.WeaponHandler;
 import megamek.common.weapons.gaussrifles.GaussWeapon;
@@ -134,6 +136,14 @@ public class WeaponMounted extends Mounted<WeaponType> {
         if (curMode().equals("Pulse")) {
             heat += 2;
         }
+
+        // Apply heat modifiers (scenario/permanent/modding)
+        for (EquipmentModifier modifier : modifiers) {
+            if (modifier instanceof HeatModifier heatModifier) {
+                heat += heatModifier.getDeltaHeat();
+            }
+        }
+        heat = Math.max(0, heat);
 
         return heat;
     }

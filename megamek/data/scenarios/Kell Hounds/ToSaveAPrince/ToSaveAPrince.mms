@@ -18,14 +18,14 @@
 #
 # Based on Battlecorps Scenario 3013, To Save a Prince, originally published in FASA's "Kell Hounds" sourcebook
 MMSVersion: 2
-name: To Save a Prince
+name: To Save a Prince [Zakahashi's Zombies]
 planet: Mallory's World
 description: |
   Prince Ian Davion commands the Fourth Davion Guards in an attempt to repel the Combine invasion on
   Mallory's World. After Kurita successes against the planetary defenders, the prince summoned a Kell
   Hounds Regiment.
   
-  *Goal: Playing as Zakahashi's Zombies, break through the Kell Hounds forces.*
+  *Goal: Playing as the Zakahashi's Zombies, break through the Kell Hounds defense.*
 
 map:
   boardrows: 2
@@ -55,122 +55,9 @@ factions:
         atleast: 6
 
   units:
-  - fullname: BattleMaster BLR-1G
-    id: 101
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Assault Lance|23
-    crew:
-      name: Tai-i Tendoru Zakahashi
-      piloting: 3
-      gunnery: 3
-
-  - fullname: Marauder MAD-3R
-    id: 102
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Assault Lance|23
-    crew:
-      name: Anson McMurphy
-      piloting: 4
-      gunnery: 4
-
-  - fullname: Grasshopper GHR-5H
-    id: 103
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Assault Lance|23
-    crew:
-      name: Franco Jones
-      callsign: Frito
-      piloting: 4
-      gunnery: 5
-
-  - fullname: Ostsol OTL-4D
-    id: 104
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Assault Lance|23
-    crew:
-      name: Art Shrett
-      piloting: 4
-      gunnery: 5
-
-  - fullname: Orion ON1-K
-    id: 105
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Support Lance|24
-    crew:
-      name: Chu-i Susie Elgin
-      piloting: 3
-      gunnery: 4
-
-  - fullname: Rifleman RFL-3N
-    id: 106
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Support Lance|24
-    remaining:
-      armor:
-        RTR: 0
-    crits:
-      LA: 5
-    crew:
-      name: Cletus Palmer
-      piloting: 4
-      gunnery: 3
-
-  - fullname: Dervish DV-6M
-    id: 107
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Support Lance|24
-    remaining:
-      armor:
-        CT: 10
-    crits:
-      CT: 11
-      LL: [ 5, 6 ]
-      RL: [ 5, 6 ]
-    crew:
-      name: Tom Meyer
-      callsign: Hands
-      piloting: 3
-      gunnery: 5
-
-  - fullname: Enforcer ENF-4R
-    id: 108
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Support Lance|24
-    crew:
-      name: Charlie Adams
-      piloting: 4
-      gunnery: 4
-
-  - fullname: Javelin JVN-10N
-    id: 109
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Light Lance|25
-    crew:
-      name: Chu-i Bob Crenshaw
-      callsign: Texas
-      piloting: 4
-      gunnery: 5
-
-  - fullname: Stinger STG-3R
-    id: 110
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Light Lance|25
-    crew:
-      name: John Parthan
-      callsign: Wrinkles
-      piloting: 5
-      gunnery: 3
-
-  - fullname: Locust LCT-1V
-    id: 111
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Light Lance|25
-    crew:
-      name: Chuck Stork
-      callsign: Bossman
-      piloting: 5
-      gunnery: 5
-
-  - fullname: Locust LCT-1V
-    id: 112
-    force: 2nd Sword of Light|21||Zakahashi's Zombies|22||Light Lance|25
-    crew:
-      name: Jack Brockman
-      callsign: Hun Killer
-      piloting: 4
-      gunnery: 5
+    - include: ToSaveAPrince_units_zombies.mmu
 
 # OPFOR -----------------------
-
 - name: Kell Hounds, Second Battalion
   camo: Mercs/Kell Hounds.jpg
   deploy:
@@ -184,109 +71,7 @@ factions:
         atmost: 5
 
   units:
-    - fullname: Crusader CRD-3R
-      id: 201
-      force: 2nd Mek Battalion|11||1st Company|12||Assault Lance|13
-      deploymentround: 2
-      crew:
-        name: Cpt. Carrol O'Caithan
-        piloting: 4
-        gunnery: 3
-
-    - fullname: Warhammer WHM-6R
-      id: 202
-      force: 2nd Mek Battalion|11||1st Company|12||Assault Lance|13
-      deploymentround: 2
-      crew:
-        name: Michael Kiltartan
-        piloting: 5
-        gunnery: 4
-
-    - fullname: JagerMech JM6-S
-      id: 203
-      force: 2nd Mek Battalion|11||1st Company|12||Assault Lance|13
-      deploymentround: 2
-      crew:
-        name: Rich O'Hare
-        piloting: 5
-        gunnery: 4
-
-    - fullname: Catapult CPLT-C1
-      id: 204
-      force: 2nd Mek Battalion|11||1st Company|12||Assault Lance|13
-      deploymentround: 2
-      crew:
-        name: Hypatia Donahue
-        piloting: 4
-        gunnery: 3
-
-    - fullname: Clint CLNT-2-3T
-      id: 205
-      force: 2nd Mek Battalion|11||1st Company|12||Fire Lance|14
-      deploymentround: 2
-      crew:
-        name: Lt. Jane Near
-        piloting: 5
-        gunnery: 4
-
-    - fullname: Vulcan VL-2T
-      id: 206
-      force: 2nd Mek Battalion|11||1st Company|12||Fire Lance|14
-      deploymentround: 2
-      crew:
-        name: Julian Goodrich
-        piloting: 5
-        gunnery: 4
-
-    - fullname: Enforcer ENF-4R
-      id: 207
-      force: 2nd Mek Battalion|11||1st Company|12||Fire Lance|14
-      deploymentround: 2
-      crew:
-        name: Robert Cross
-        piloting: 4
-        gunnery: 3
-
-    - fullname: Dervish DV-6M
-      id: 208
-      force: 2nd Mek Battalion|11||1st Company|12||Fire Lance|14
-      deploymentround: 2
-      crew:
-        name: Robin Buckley
-        piloting: 5
-        gunnery: 4
-
-    - fullname: Jenner JR7-D
-      id: 209
-      force: 2nd Mek Battalion|11||1st Company|12||Recon Lance|15
-      crew:
-        name: Lt. Jim Morrel
-        piloting: 4
-        gunnery: 3
-
-    - fullname: Valkyrie VLK-QA
-      id: 210
-      force: 2nd Mek Battalion|11||1st Company|12||Recon Lance|15
-      crew:
-        name: Kevin Connor
-        piloting: 5
-        gunnery: 4
-
-    - fullname: UrbanMech UM-R60
-      id: 211
-      force: 2nd Mek Battalion|11||1st Company|12||Recon Lance|15
-      crew:
-        name: Estyn Burns
-        piloting: 5
-        gunnery: 4
-
-    - fullname: Javelin JVN-10N
-      id: 212
-      force: 2nd Mek Battalion|11||1st Company|12||Recon Lance|15
-      crew:
-        name: Erin Finney
-        piloting: 4
-        gunnery: 3
+    - include: ToSaveAPrince_units_kell.mmu
 
 messages:
   - header: Situation
