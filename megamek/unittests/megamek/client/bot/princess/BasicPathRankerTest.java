@@ -184,7 +184,7 @@ class BasicPathRankerTest {
         final Entity mockMyUnit = MockGenerators.generateMockBipedMek(0, 0);
         when(mockMyUnit.canChangeSecondaryFacing()).thenReturn(true);
 
-        doReturn(10.0).when(testRanker).getMaxDamageAtRange(nullable(FireControl.class),
+        doReturn(10.0).when(testRanker).getMaxDamageAtRange(
                 eq(mockMyUnit), anyInt(), anyBoolean(), anyBoolean());
 
         final MovePath mockPath = MockGenerators.generateMockPath(testCoords, mockMyUnit);
@@ -208,7 +208,7 @@ class BasicPathRankerTest {
         final Entity mockMyUnit = MockGenerators.generateMockBipedMek(0, 0);
         when(mockMyUnit.canChangeSecondaryFacing()).thenReturn(true);
 
-        doReturn(10.0).when(testRanker).getMaxDamageAtRange(nullable(FireControl.class),
+        doReturn(10.0).when(testRanker).getMaxDamageAtRange(
                 eq(mockMyUnit), anyInt(), anyBoolean(), anyBoolean());
 
         final MovePath mockPath = MockGenerators.generateMockPath(testCoords, mockMyUnit);
@@ -227,7 +227,7 @@ class BasicPathRankerTest {
                 .isInMyLoS(eq(mockEnemyMek), any(HexLine.class), any(HexLine.class));
         doReturn(8.5)
                 .when(testRanker)
-                .getMaxDamageAtRange(nullable(FireControl.class), eq(mockEnemyMek), anyInt(),
+                .getMaxDamageAtRange(eq(mockEnemyMek), anyInt(),
                         anyBoolean(),
                         anyBoolean());
         doReturn(false)
@@ -253,7 +253,7 @@ class BasicPathRankerTest {
         final Entity mockMyUnit = MockGenerators.generateMockBipedMek(0, 0);
         when(mockMyUnit.canChangeSecondaryFacing()).thenReturn(true);
 
-        doReturn(10.0).when(testRanker).getMaxDamageAtRange(nullable(FireControl.class),
+        doReturn(10.0).when(testRanker).getMaxDamageAtRange(
                 eq(mockMyUnit), anyInt(), anyBoolean(), anyBoolean());
 
         final MovePath mockPath = MockGenerators.generateMockPath(testCoords, mockMyUnit);
@@ -272,7 +272,7 @@ class BasicPathRankerTest {
                 .isInMyLoS(eq(mockEnemyMek), any(HexLine.class), any(HexLine.class));
         doReturn(8.5)
                 .when(testRanker)
-                .getMaxDamageAtRange(nullable(FireControl.class), eq(mockEnemyMek), anyInt(),
+                .getMaxDamageAtRange(eq(mockEnemyMek), anyInt(),
                         anyBoolean(), anyBoolean());
         doReturn(false)
                 .when(testRanker)
@@ -295,7 +295,7 @@ class BasicPathRankerTest {
         final Entity mockMyUnit = MockGenerators.generateMockBipedMek(0, 0);
         when(mockMyUnit.canChangeSecondaryFacing()).thenReturn(true);
 
-        doReturn(10.0).when(testRanker).getMaxDamageAtRange(nullable(FireControl.class),
+        doReturn(10.0).when(testRanker).getMaxDamageAtRange(
                 eq(mockMyUnit), anyInt(), anyBoolean(), anyBoolean());
 
         final MovePath mockPath = MockGenerators.generateMockPath(testCoords, mockMyUnit);
@@ -314,7 +314,7 @@ class BasicPathRankerTest {
                 .isInMyLoS(eq(mockEnemyMek), any(HexLine.class), any(HexLine.class));
         doReturn(8.5)
                 .when(testRanker)
-                .getMaxDamageAtRange(nullable(FireControl.class), eq(mockEnemyMek), anyInt(),
+                .getMaxDamageAtRange(eq(mockEnemyMek), anyInt(),
                         anyBoolean(), anyBoolean());
         doReturn(true)
                 .when(testRanker)

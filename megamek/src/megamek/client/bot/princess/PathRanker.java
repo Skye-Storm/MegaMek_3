@@ -23,7 +23,6 @@ import megamek.client.bot.BotLogger;
 import megamek.client.bot.princess.UnitBehavior.BehaviorType;
 import megamek.client.ui.Messages;
 import megamek.client.ui.SharedUtility;
-import megamek.codeUtilities.StringUtility;
 import megamek.common.*;
 import megamek.common.annotations.Nullable;
 import megamek.common.options.OptionsConstants;
@@ -33,7 +32,6 @@ import org.apache.logging.log4j.Level;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
 import java.util.*;
 
 import static megamek.client.ui.SharedUtility.predictLeapDamage;
@@ -55,6 +53,7 @@ public abstract class PathRanker implements IPathRanker {
      * Princess.InitializePathRankers
      */
     public enum PathRankerType {
+        Advanced,
         Basic,
         Infantry,
         NewtonianAerospace,
@@ -62,6 +61,7 @@ public abstract class PathRanker implements IPathRanker {
     }
 
     private final Princess owner;
+    protected final Map<EntityMovementType, PilotingRollData> cachedPilotBaseRoll = new HashMap<>();
 
     public PathRanker(Princess princess) {
         owner = princess;
@@ -75,19 +75,21 @@ public abstract class PathRanker implements IPathRanker {
     public TreeSet<RankedPath> rankPaths(List<MovePath> movePaths, Game game, int maxRange,
             double fallTolerance, List<Entity> enemies,
             List<Entity> friends) {
+        cachedPilotBaseRoll.clear();
         // No point in ranking an empty list.
         if (movePaths.isEmpty()) {
-            return new TreeSet<>();
+            return new TreeSet<>(Collections.reverseOrder());
         }
 
         // the cached path probability data is really only relevant for one iteration
         // through this method
         getPathRankerState().getPathSuccessProbabilities().clear();
-
+        cachedPilotBaseRoll.clear();
         // Let's try to whittle down this list.
         List<MovePath> validPaths = validatePaths(movePaths, game, maxRange, fallTolerance);
         logger.debug("Validated " + validPaths.size() + " out of " + movePaths.size() + " possible paths.");
 
+        logger.debug("Validated {} out of {} possible paths", validPaths.size(), movePaths.size());
         // If the heat map of friendly activity has sufficient data, use the nearest hot
         // spot as
         // the anchor point
@@ -104,6 +106,7 @@ public abstract class PathRanker implements IPathRanker {
             BigDecimal interval = new BigDecimal(5);
             boolean withHeader = true;
             boolean pathsHaveExpectedDamage = false;
+
             for (MovePath path : validPaths) {
                 try {
                     count = count.add(BigDecimal.ONE);
@@ -126,9 +129,10 @@ public abstract class PathRanker implements IPathRanker {
                         interval = percent.add(new BigDecimal(5));
                     }
                 } catch (Exception e) {
-                    logger.error(e, e.getMessage() + "while processing " + path);
+                    logger.error(e, e.getMessage());
                 }
             }
+
             Entity mover = movePaths.get(0).getEntity();
             UnitBehavior behaviorTracker = getOwner().getUnitBehaviorTracker();
             boolean noDamageButCanDoDamage = !pathsHaveExpectedDamage
@@ -162,11 +166,9 @@ public abstract class PathRanker implements IPathRanker {
         return returnPaths;
     }
 
-    private List<MovePath> validatePaths(List<MovePath> startingPathList, Game game, int maxRange,
+    protected List<MovePath> validatePaths(List<MovePath> startingPathList, Game game, int maxRange,
             double fallTolerance) {
         if (startingPathList.isEmpty()) {
-            // Nothing to validate here, might as well return the empty list
-            // straight away.
             return startingPathList;
         }
 
@@ -326,6 +328,7 @@ public abstract class PathRanker implements IPathRanker {
         return closest;
     }
 
+
     /**
      * Returns the probability of success of a move path
      */
@@ -390,7 +393,7 @@ public abstract class PathRanker implements IPathRanker {
      * @param path
      * @return
      */
-    protected double calculateMovePathPSRDamage(Entity movingEntity, MovePath path) {
+    public double calculateMovePathPSRDamage(Entity movingEntity, MovePath path) {
         double damage = 0.0;
 
         List<TargetRoll> pilotingRolls = getPSRList(path);
@@ -412,7 +415,7 @@ public abstract class PathRanker implements IPathRanker {
     }
 
     protected List<TargetRoll> getPSRList(MovePath path) {
-        return SharedUtility.getPSRList(path);
+        return SharedUtility.getPSRList(cachedPilotBaseRoll, path);
     }
 
     /**

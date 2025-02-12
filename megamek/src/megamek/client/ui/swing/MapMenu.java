@@ -436,6 +436,7 @@ public class MapMenu extends JPopupMenu {
         JMenu behaviorMenu = createBehaviorMenu(bot);
 
         targetHexMenu.add(createTargetHexMenuItem(bot));
+        targetHexMenu.add(createWaypointHexMenuItem(bot));
         menu.add(targetHexMenu);
 
         for (Entity entity : client.getGame().getEntitiesVector(coords)) {
@@ -471,14 +472,14 @@ public class MapMenu extends JPopupMenu {
         JMenu menu = new JMenu(Messages.getString("Bot.commands.herding"));
         JMenuItem item = new JMenuItem("+");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: herd : +",
+            client.sendChat(String.format("%s: he : +",
                 bot.getName()
             ));
         });
         menu.add(item);
         item = new JMenuItem("-");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: herd : -",
+            client.sendChat(String.format("%s: he : -",
                 bot.getName()
             ));
         });
@@ -490,14 +491,14 @@ public class MapMenu extends JPopupMenu {
         JMenu menu = new JMenu(Messages.getString("Bot.commands.bravery"));
         JMenuItem item = new JMenuItem("+");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: brave : +",
+            client.sendChat(String.format("%s: br : +",
                 bot.getName()
             ));
         });
         menu.add(item);
         item = new JMenuItem("-");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: brave : -",
+            client.sendChat(String.format("%s: br : -",
                 bot.getName()
             ));
         });
@@ -509,14 +510,14 @@ public class MapMenu extends JPopupMenu {
         JMenu menu = new JMenu(Messages.getString("Bot.commands.aggression"));
         JMenuItem item = new JMenuItem("+");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: aggression : +",
+            client.sendChat(String.format("%s: ag : +",
                 bot.getName()
             ));
         });
         menu.add(item);
         item = new JMenuItem("-");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: aggression : -",
+            client.sendChat(String.format("%s: ag : -",
                 bot.getName()
             ));
         });
@@ -528,14 +529,14 @@ public class MapMenu extends JPopupMenu {
         JMenu menu = new JMenu(Messages.getString("Bot.commands.avoid"));
         JMenuItem item = new JMenuItem("+");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: avoid : +",
+            client.sendChat(String.format("%s: av : +",
                 bot.getName()
             ));
         });
         menu.add(item);
         item = new JMenuItem("-");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: avoid : -",
+            client.sendChat(String.format("%s: av : -",
                 bot.getName()
             ));
         });
@@ -547,14 +548,14 @@ public class MapMenu extends JPopupMenu {
         JMenu menu = new JMenu(Messages.getString("Bot.commands.caution"));
         JMenuItem item = new JMenuItem("+");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: caution : +",
+            client.sendChat(String.format("%s: ca : +",
                 bot.getName()
             ));
         });
         menu.add(item);
         item = new JMenuItem("-");
         item.addActionListener(evt -> {
-            client.sendChat(String.format("%s: caution : -",
+            client.sendChat(String.format("%s: ca : -",
                 bot.getName()
             ));
         });
@@ -582,7 +583,7 @@ public class MapMenu extends JPopupMenu {
                 JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
-                client.sendChat(String.format("%s: flee : %d",
+                client.sendChat(String.format("%s: fl : %d",
                     bot.getName(),
                     cardinalEdge.getIndex()
                 ));
@@ -595,7 +596,7 @@ public class MapMenu extends JPopupMenu {
     JMenuItem createIgnoreTargetUnitMenu(Player bot, Entity entity) {
         JMenuItem item = new JMenuItem(entity.getDisplayName());
         item.addActionListener(evt ->
-            client.sendChat(String.format("%s: ignoreTarget : %d",
+            client.sendChat(String.format("%s: ig : %d",
                 bot.getName(),
                 entity.getId()
             ))
@@ -606,7 +607,7 @@ public class MapMenu extends JPopupMenu {
     JMenuItem createPrioritizeTargetUnitMenu(Player bot, Entity entity) {
         JMenuItem item = new JMenuItem(entity.getDisplayName());
         item.addActionListener(evt ->
-            client.sendChat(String.format("%s: prioritize : %d",
+            client.sendChat(String.format("%s: pr : %d",
                 bot.getName(),
                 entity.getId()
             ))
@@ -616,13 +617,35 @@ public class MapMenu extends JPopupMenu {
 
     JMenuItem createTargetHexMenuItem(Player bot) {
         JMenuItem item = new JMenuItem(coords.toFriendlyString());
+
+        var format = (Math.max(coords.getX()+1, coords.getY() + 1) > 99) ? "%s: ta: %03d%03d" : "%s: ta: %02d%02d";
+
         item.addActionListener(evt ->
-            client.sendChat(String.format("%s: target : %02d%02d",
+            client.sendChat(String.format(format,
                 bot.getName(),
                 coords.getX()+1,
                 coords.getY()+1
             ))
         );
+        return item;
+    }
+
+    JMenuItem createWaypointHexMenuItem(Player bot) {
+        JMenu item = new JMenu("Add waypoint to " + coords.toFriendlyString());
+        var format = (Math.max(coords.getX()+1, coords.getY() + 1) > 99) ? "%s: aw: %d %03d%03d" : "%s: aw: %d %02d%02d";
+        for (var unit : client.getGame().getPlayerEntities(bot, false)) {
+            JMenuItem entry = new JMenuItem(unit.getDisplayName());
+            item.addActionListener(evt ->
+                client.sendChat(String.format(format,
+                    bot.getName(),
+                    unit.getId(),
+                    coords.getX()+1,
+                    coords.getY()+1
+                ))
+            );
+            item.add(entry);
+        }
+
         return item;
     }
 

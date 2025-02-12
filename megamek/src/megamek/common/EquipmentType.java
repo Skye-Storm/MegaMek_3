@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.BitSet;
 
 import megamek.common.annotations.Nullable;
 import megamek.common.equipment.ArmorType;
@@ -189,7 +190,6 @@ public class EquipmentType implements ITechnology {
     // static list of equipment
     protected static Vector<EquipmentType> allTypes;
     protected static Hashtable<String, EquipmentType> lookupHash;
-
     /**
      * Keeps track of page numbers for rules references.
      */
@@ -203,6 +203,7 @@ public class EquipmentType implements ITechnology {
     public void setFlags(EquipmentBitSet flags) {
         this.flags = flags;
     }
+
 
     public long getSubType() {
         return subType;
@@ -521,6 +522,7 @@ public class EquipmentType implements ITechnology {
     public boolean hasFlag(EquipmentBitSet flag) {
         return flags.contains(flag);
     }
+
 
     public double getBV(Entity entity) {
         return bv;
