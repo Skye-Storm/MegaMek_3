@@ -65,6 +65,7 @@ public class LobbyMekPopupActions implements ActionListener {
         switch (command) {
             // Single entity commands
             case LMP_CONFIGURE:
+            case LMP_TOW:
                 if (!entities.isEmpty()) {
                     Entity randomSelected = entities.stream().findAny().get();
                     singleEntityAction(command, randomSelected, info);
@@ -487,6 +488,10 @@ public class LobbyMekPopupActions implements ActionListener {
         switch (command) {
             case LMP_CONFIGURE:
                 lobby.lobbyActions.customizeMek(entity);
+                break;
+
+            case LMP_TOW:
+                lobby.lobbyActions.tow(entity, info);
                 break;
 
 
