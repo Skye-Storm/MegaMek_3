@@ -266,7 +266,7 @@ public record MekDamageApplier(Mek entity, EntityFinalState entityFinalState) im
     private HitDetails hitAmmo(HitDetails hitDetails, AmmoType ammoType, CriticalSlot crit, Mek entity) {
         var shots = ammoType.getShots();
         var damagePerShort = ammoType.getDamagePerShot();
-        var damage = damagePerShort * shots;
+        var damage = damagePerShort * shots / 10;
         crit.setHit(true);
 
         if (damage > 0) {
